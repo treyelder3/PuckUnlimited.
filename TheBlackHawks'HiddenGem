@@ -1,3 +1,5 @@
+/*This is SQL code*/
+
 /*To create the teams table:*/
 
 CREATE TABLE team_stats_2023 (

@@ -1,0 +1,124 @@
+/*To create the teams table:*/
+
+CREATE TABLE team_stats_2023 (
+	team char(3),
+	season char(4),
+	situation text,
+	teamkey text,
+	iceTime integer,
+	xOnGoalAgainst numeric(6,2),
+	xGoalsAgainst numeric(6,2),
+	shotsOnGoalAgainst smallint,
+	missedShotsAgainst smallint,
+	shotAttemptsAgainst smallint,
+	goalsAgainst smallint,
+	lowDangerShotsAgainst smallint,
+	mediumDangerShotsAgainst smallint,
+	highDangerShotsAgainst smallint,
+	CONSTRAINT team_key PRIMARY KEY (teamkey)
+);
+
+/*To import data into the teams table:*/
+
+COPY team_stats_2023
+FROM 'C:\Users\treye\Downloads\teams (3).csv'
+WITH (FORMAT CSV, HEADER);
+
+/*To create the skaters table:*/
+
+CREATE TABLE skaters_stats_2023 (
+	season smallint,
+	skaterName text,
+	team text,
+	skaterPosition char(1),
+	situation text,
+	teamkey text,
+	gamesPlayed smallint,
+	icetime integer,
+	IFoZoneShiftStarts smallint,
+	IFdZoneShiftStarts smallint,
+	IFneutralZoneShiftStarts smallint,
+	onIceAxGoals numeric(6,2),
+	onIceAshotAttempts smallint,
+	onIceAgoals smallint,
+	onIceAlowDangerShots smallint,
+	onIceAmediumDangerShots smallint,
+	onIceAhighDangerShots smallint,
+	FOREIGN KEY (teamkey) REFERENCES team_stats_2023 (teamkey)
+);
+
+/*To import data into the skaters table:*/
+
+COPY skaters_stats_2023
+FROM 'C:\Users\treye\Downloads\skaters (2).csv'
+WITH (FORMAT CSV, HEADER);
+
+/*This query was used to calculate the GBT60 stat I use in my analysis and rank the players based on it. Right now it gives the GBT60 at 5 on 5. 
+To get the GBT60 scores for all situations, I changed ‘5on5’ to ‘all’ and 15 to 20 in the WHERE clause. To get the GBT60 scores for the penalty kill, 
+I changed ‘5on5’ to ‘4on5’ and 15 to 2 in the WHERE clause.*/
+
+SELECT skaters.skatername, round((((3600)*(team.goalsagainst::numeric-skaters.oniceagoals::numeric)/(team.icetime::numeric-skaters.icetime::numeric))
+	-(3600*(skaters.oniceagoals::numeric/skaters.icetime::numeric))), 2) AS goals_against_below_team_per_60_min, 
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) AS time_on_ice_per_game, rank() OVER (ORDER BY round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) DESC) AS toi_rank,
+	team.goalsagainst, dense_rank() OVER (ORDER BY team.goalsagainst) AS team_goals_against_rank
+FROM team_stats_2023 AS team JOIN skaters_stats_2023 AS skaters USING (teamkey)
+WHERE team.situation = '5on5' AND skaters.situation = '5on5' AND skaters.gamesplayed >= 65 AND  
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2)>= 15
+	AND skaterposition = 'D'
+ORDER BY goals_against_below_team_per_60_min DESC;
+
+/*This query was used to calculate the  expected goals version of the GBT60 stat I use in my analysis and rank the players based on it. 
+Right now it gives the expected goals version of GBT60 at 5 on 5. To get the expected goals version of GBT60 scores for all situations, 
+I changed ‘5on5’ to ‘all’ and 15 to 20 in the WHERE clause. To get the expected goals version of GBT60 scores for the penalty kill, 
+I changed ‘5on5’ to ‘4on5’ and 15 to 2 in the WHERE clause. This query also calculated the defensive zone start percentage statistic I 
+used in my analysis and used the rank() analytic function to rank them without me having to run a separate query.*/
+
+SELECT skaters.skatername, round(((3600*(team.xgoalsagainst-skaters.oniceaxgoals)/(team.icetime - skaters.icetime))-(skaters.oniceaxgoals*3600/skaters.icetime)), 2) AS xGoals_against_per60,
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) AS time_on_ice_per_game, rank() OVER (ORDER BY round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) DESC) AS toi_rank,
+	team.goalsagainst, dense_rank() OVER (ORDER BY team.goalsagainst) AS team_goals_against_rank, round(skaters.ifdzoneshiftstarts::numeric/(ifozoneshiftstarts+ifneutralzoneshiftstarts+ifdzoneshiftstarts), 2) AS dzone_shift_start_pct,
+	rank() OVER (ORDER BY round(skaters.ifdzoneshiftstarts::numeric/(ifozoneshiftstarts+ifneutralzoneshiftstarts+ifdzoneshiftstarts), 2) DESC) AS dzone_shift_start_pct_ranks
+FROM team_stats_2023 AS team JOIN skaters_stats_2023 AS skaters USING (teamkey)
+WHERE team.situation = '5on5' AND skaters.situation = '5on5' AND skaters.gamesplayed >= 65 AND  
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2)>= 15
+	AND skaterposition = 'D'
+ORDER BY xGoals_against_per60 DESC;
+
+/*This query was used to calculate goals against per 60 minutes and rank the players based on it. Right now it gives the statistic at 5 on 5. 
+To get the goals against per 60 minutes at 5 on 5, I changed ‘all’ to ‘5on5’ and 20 to 15 in the WHERE clause. To get the goals against per 
+60 minutes for the penalty kill, I changed ‘all’ to ‘4on5’ and 20 to 2 in the WHERE clause.*/
+
+SELECT skaters.skatername, round(3600*skaters.oniceagoals::numeric/skaters.icetime, 2) AS ga_60min, round(((3600*(team.xgoalsagainst-skaters.oniceaxgoals)/(team.icetime - skaters.icetime))-(skaters.oniceaxgoals*3600/skaters.icetime)), 2) AS xGoals_against_per60,
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) AS time_on_ice_per_game, rank() OVER (ORDER BY round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) DESC) AS toi_rank,
+	team.goalsagainst, dense_rank() OVER (ORDER BY team.goalsagainst) AS team_goals_against_rank
+FROM team_stats_2023 AS team JOIN skaters_stats_2023 AS skaters USING (teamkey)
+WHERE team.situation = 'all' AND skaters.situation = 'all' AND skaters.gamesplayed >= 65 AND  
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2)>= 20
+	AND skaterposition = 'D'
+ORDER BY ga_60min ASC;
+
+/*This query was used to calculate the number of high danger shots against for each defenseman. Right now it is set to calculate this 
+statistic in all situations. To calculate it at 5 on 5, I switched the ‘all’ to ‘5on5’ and 20 to 15 in the WHERE clause. To calculate 
+it on the penalty kill, I switched the ‘all’ to ‘4on5’ and 20 and 2 in the WHERE clause.*/
+
+SELECT skaters.skatername, round(3600*skaters.oniceashotattempts::numeric/skaters.icetime, 2) AS shot_att_against_60,
+round(skaters.ifdzoneshiftstarts::numeric/(ifozoneshiftstarts+ifneutralzoneshiftstarts+ifdzoneshiftstarts), 2) AS dzone_shift_start_pct,
+	rank() OVER (ORDER BY round(skaters.ifdzoneshiftstarts::numeric/(ifozoneshiftstarts+ifneutralzoneshiftstarts+ifdzoneshiftstarts), 2) DESC) AS dzone_shift_start_pct_ranks,
+	round(3600*skaters.oniceahighdangershots::numeric/skaters.icetime, 2) AS high_pct_shots,
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) AS time_on_ice_per_game, rank() OVER (ORDER BY round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2) DESC) AS toi_rank
+FROM team_stats_2023 AS team JOIN skaters_stats_2023 AS skaters USING (teamkey)
+WHERE team.situation = '4on5' AND skaters.situation = '4on5' AND skaters.gamesplayed >= 65 AND  
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2)>= 2.23
+	AND skaterposition = 'D'
+ORDER BY high_pct_shots ASC;
+
+/*This query was used to calculate the average goals against per 60 value for a defenseman on the 
+Chicago Blackhawks. This is where I used a group by clause as well as the analytic function avg().*/
+
+SELECT skaters.team, round(avg(3600*skaters.oniceagoals::numeric/skaters.icetime), 2)
+FROM team_stats_2023 AS team JOIN skaters_stats_2023 AS skaters USING (teamkey)
+WHERE team.situation = 'all' AND skaters.situation = 'all' AND skaters.gamesplayed >= 0 AND  
+	round(skaters.icetime::numeric/(60*skaters.gamesplayed), 2)>= 0
+	AND skaterposition = 'D'
+GROUP BY skaters.team
+ORDER BY round(avg(3600*skaters.oniceagoals::numeric/skaters.icetime), 2) ASC;
+

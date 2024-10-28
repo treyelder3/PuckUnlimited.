@@ -23,7 +23,7 @@ CREATE TABLE team_stats_2023 (
 /*To import data into the teams table:*/
 
 COPY team_stats_2023
-FROM 'C:\Users\treye\Downloads\teams (3).csv'
+FROM 'Pathway\teams (3).csv'
 WITH (FORMAT CSV, HEADER);
 
 /*To create the skaters table:*/
@@ -52,7 +52,7 @@ CREATE TABLE skaters_stats_2023 (
 /*To import data into the skaters table:*/
 
 COPY skaters_stats_2023
-FROM 'C:\Users\treye\Downloads\skaters (2).csv'
+FROM 'Pathway\skaters (2).csv'
 WITH (FORMAT CSV, HEADER);
 
 /*This query was used to calculate the GBT60 stat I use in my analysis and rank the players based on it. Right now it gives the GBT60 at 5 on 5. 

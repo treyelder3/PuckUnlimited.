@@ -1,0 +1,61 @@
+---
+title: "Final Project Lasso Regression"
+author: "Trey Elder"
+date: "2024-10-17"
+output: html_document
+---
+
+```{r, echo = TRUE}
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+library(dplyr)
+install.packages("glmnet")
+library(glmnet)
+library(caret)
+library(ggplot2)
+games <- read.csv("all_teams.csv", header = TRUE)
+games <- games %>% filter(situation == "all", !(goalsFor == goalsAgainst)) %>% select(-situation, -team, -season, -name, -playerTeam, -opposingTeam, -home_or_away, -gameId, -gameDate, -position, -iceTime)
+games$win <- ifelse(games$goalsFor > games$goalsAgainst, 1, 0)
+games <- games %>% select(-goalsFor, -goalsAgainst, -lowDangerGoalsFor, -lowDangerGoalsAgainst, -mediumDangerGoalsFor, -mediumDangerGoalsAgainst, -highDangerGoalsFor, -highDangerGoalsAgainst, -reboundGoalsFor, -reboundGoalsAgainst, -savedShotsOnGoalFor, - savedShotsOnGoalAgainst, -savedUnblockedShotAttemptsFor, -savedUnblockedShotAttemptsAgainst, -scoreAdjustedUnblockedShotAttemptsFor, -scoreAdjustedUnblockedShotAttemptsAgainst, -totalShotCreditFor, -totalShotCreditAgainst, -flurryScoreVenueAdjustedxGoalsAgainst, -flurryScoreVenueAdjustedxGoalsFor, -scoreVenueAdjustedxGoalsAgainst, -scoreVenueAdjustedxGoalsFor, -scoreAdjustedUnblockedShotAttemptsFor, -scoreAdjustedUnblockedShotAttemptsAgainst, -xGoalsPercentage)
+games <- games %>% select(win, everything())
+games <- games %>% mutate(xgfps = xGoalsFor/shotsOnGoalFor, xgaps = xGoalsAgainst/shotsOnGoalAgainst)
+games_reg <- games %>% filter(playoffGame == 0)
+games_reg <- games_reg %>% select(-playoffGame)
+games_post <- games %>% filter(playoffGame == 1)
+games_post <- games_post %>% select(-playoffGame)
+
+set.seed(35)
+n = dim(games_reg)[1]
+train = sample(n, 0.8 * n)
+test = setdiff(1:n, train)
+
+m = dim(games_post)[1]
+train2 = sample(m, 0.8 * m)
+test2 = setdiff(1:m, train2)
+
+cv.lasso = cv.glmnet(as.matrix(games_reg[train, -1]), games_reg$win[train], alpha = 1,family="binomial")
+lasso = glmnet(as.matrix(games_reg[train, -1]), games_reg$win[train], alpha = 1, lambda = cv.lasso$lambda.min, family = "binomial")
+preds <- predict(lasso, s = "lambda.min", newx = as.matrix(games_reg[test, -1]), type = "response")
+predicted_classes <- ifelse(preds > 0.5, 1, 0)
+misclassification_rate <- mean(predicted_classes != games_reg$win[test])
+print(misclassification_rate)
+print(lasso$beta)
+
+#importance <- varImp(lasso, lambda = cv.lasso$lambda.min)
+#importance
+
+#barplot(importance, xlab = "Importance", ylab = "Variable Name", main = "Variable #Importance Plot")
+
+coefs <- coef(lasso, s = "lambda.min")
+var_imp <- data.frame(
+  variable = rownames(coefs)[-1],
+  importance = abs(as.vector(coefs)[-1])
+)
+var_imp <- var_imp[order(var_imp$importance, decreasing = TRUE), ]
+var_imp <- var_imp %>% filter(importance > 0)
+
+library(ggplot2)
+ggplot(var_imp, aes(x = reorder(variable, importance), y = importance)) +
+  geom_bar(stat = "identity") + coord_flip() + labs(x = "Variable", y = "Importance",  title = "Variable Importance")
+
+
+```

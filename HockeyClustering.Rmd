@@ -1,0 +1,71 @@
+---
+title: "HockeyClustering"
+author: "Trey Elder"
+date: "2024-12-24"
+output: html_document
+---
+
+```{r, echo = TRUE}
+library(tidyverse)
+library(ggrepel)
+library(ggplot2)
+skaters2023 <- read.csv("C:/Users/treye/OneDrive/Documents/skaters_2024.csv", header = TRUE)
+skaters2023 <- skaters2023 %>% filter(position == "D", situation == "5on5", games_played >= 20)
+skaters23 <- skaters2023 %>% mutate(icetimepg = icetime/games_played, dZoneShiftStartspg = I_F_dZoneShiftStarts/icetime, oZoneShiftStartspg = I_F_oZoneShiftStarts/icetime, goalsper60 = 3600*I_F_goals/icetime, takeawaysper60 = 3600*I_F_takeaways/icetime, hitsper60 = 3600*I_F_hits/icetime, blocksper60 = 3600*shotsBlockedByPlayer/icetime, assistsper60 = 3600*(I_F_primaryAssists + I_F_secondaryAssists)/icetime, penaltyMinutesper60 = 3600*penalityMinutes/icetime, shotattemptsper60 = 3600*I_F_shotAttempts/icetime, shotsongoalagainstper60 = 3600*OnIce_A_shotsOnGoal/icetime, onIcegoalsForper60 = 3600*OnIce_F_goals/icetime, onIcegoalsAgainstper60 = 3600*OnIce_A_goals/icetime, oniceareboundgoalsper60 = 3600*OnIce_A_reboundGoals/icetime, oniceahighdangershotsper60 = 3600*OnIce_A_highDangerShots/icetime, dzoneshiftstartpct = (I_F_dZoneShiftStarts/(I_F_dZoneShiftStarts+I_F_oZoneShiftStarts+I_F_neutralZoneShiftStarts)), ozoneshiftstartpct = (I_F_oZoneShiftStarts/(I_F_dZoneShiftStarts+I_F_oZoneShiftStarts+I_F_neutralZoneShiftStarts)))
+
+dmanstats <- skaters23 %>% select(goalsper60, assistsper60, takeawaysper60, blocksper60, hitsper60, penaltyMinutesper60, onIce_xGoalsPercentage, onIce_corsiPercentage, shotattemptsper60, shotsongoalagainstper60, onIcegoalsForper60, onIcegoalsAgainstper60, oniceahighdangershotsper60, oniceareboundgoalsper60, dzoneshiftstartpct, ozoneshiftstartpct)
+
+
+
+K = 20
+within = numeric(K - 1)
+for (k in 2:K)
+{
+fit = kmeans(dmanstats, k, nstart = 100)
+within[k - 1] = fit$tot.withinss
+}
+plot(2:K, within, "b", pch = 16, lwd = 2, xlab = "Number of Clusters", ylab = "
+Within Cluster Total Sum of Squares")
+
+colors <- c("red", "blue", "green", "black", "orange", "purple", "yellow", "magenta", "cyan", "pink")
+fit <- kmeans(dmanstats, 8, nstart = 100)
+PC <- princomp(dmanstats)
+plot(Comp.2 ~ Comp.1, PC$scores, pch = 16, col = colors[fit$cluster])
+ggplot(PC$loadings[], aes(Comp.1, Comp.2, label = names(dmanstats))) + geom_point() + geom_label_repel() + theme_classic() + xlab("First Principal Component Loadings") + ylab("Second Principal Component Loadings") + geom_hline(yintercept = 0, linetype = "dashed")
+
+pairs(dmanstats[, 1:4], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 5:8], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 9:12], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 13:16], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 1:2], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 3:4], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 5:6], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 7:8], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 9:10], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 11:12], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 13:14], col = colors[fit$cluster], pch = 16)
+pairs(dmanstats[, 15:16], col = colors[fit$cluster], pch = 16)
+
+dmanstats$cluster <- fit$cluster
+dmanstats$name <- skaters23$name
+dmanstats2 <- dmanstats %>% select(name, cluster)
+reshaped_df <- dmanstats2 %>%
+  group_by(cluster) %>%
+  summarise(names = list(name)) %>%
+  pivot_wider(names_from = cluster, values_from = names)
+summary(PC, loading = TRUE)
+
+print(reshaped_df$'1')
+print(reshaped_df$'2')
+print(reshaped_df$'3')
+print(reshaped_df$'4')
+print(reshaped_df$'5')
+print(reshaped_df$'6')
+print(reshaped_df$'7')
+print(reshaped_df$'8')
+#print(reshaped_df$'9')
+#print(reshaped_df$'10')
+
+
+
+```

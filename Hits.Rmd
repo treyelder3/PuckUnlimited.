@@ -1,0 +1,110 @@
+---
+title: "Hits"
+author: "Trey Elder"
+date: "2025-06-4"
+output: html_document
+---
+
+```{r, echo = TRUE}
+#Import the necessary packages
+devtools::install_github("danmorse314/hockeyR")
+library(hockeyR)
+library(tidyverse)
+library(dplyr)
+```
+
+```{r, echo = TRUE}
+#Load in each year of data using hockeyR's load_pbp() method
+pbp1011 <- load_pbp("2010-11")
+pbp1112 <- load_pbp("2011-12")
+pbp1213 <- load_pbp("2012-13")
+pbp1314 <- load_pbp("2013-14")
+pbp1415 <- load_pbp("2014-15")
+pbp1516 <- load_pbp("2015-16")
+pbp1617 <- load_pbp("2016-17")
+pbp1718 <- load_pbp("2017-18")
+pbp1819 <- load_pbp("2018-19")
+pbp1920 <- load_pbp("2019-20")
+pbp2021 <- load_pbp("2020-21")
+pbp2122 <- load_pbp("2021-22")
+pbp2223 <- load_pbp("2022-23")
+pbp2324 <- load_pbp("2023-24")
+```
+
+```{r, echo = TRUE}
+#Create a dataframe containing all the data
+pbp_list <- list(pbp1011, pbp1112, pbp1213, pbp1314, pbp1415, pbp1516, pbp1617, pbp1718, pbp1819, pbp1920, pbp2021, pbp2122, pbp2223)
+pbp_list2 <- list()
+for(pbp in pbp_list){
+pbp <- pbp %>% select(event, xg, event_team, event_team_abbr, event_player_1_name, period, x, y,  x_fixed, y_fixed, season_type, home_skaters, away_skaters, game_id)
+pbp_list2 <- append(pbp_list2, list(pbp))
+    }
+pbp <- bind_rows(pbp_list2)
+```
+
+```{r, echo = TRUE}
+#Manipulate data to identify shots on goal that come after hits
+pbp <- pbp %>% mutate(next_event = lead(event), next_team = lead(event_team), next_period = lead(period), added_xg = lead(xg), next_x = lead(x), result = if_else((x > 25 & next_x > 25) | (x < -25 & next_x < -25),TRUE, FALSE))
+pbp <- pbp %>% mutate(shot_after_hit = if_else((next_event == "shot-on-goal") | (next_event == "Shot") | (next_event == "Goal") | (next_event == "goal"), 1, 0), goal_after_hit = if_else((next_event == "goal") | (next_event == "Goal"), 1, 0))
+pbp <- pbp %>% filter(((event == "hit") | (event == "Hit")) & (event_team == next_team) & (period == next_period) & (result == TRUE) & ((season_type == "REG") | (season_type == "R") | (season_type == "2")) & ((home_skaters == 5) & (away_skaters == 5))) %>% select(x, y, added_xg, shot_after_hit, goal_after_hit, event_team, event_player_1_name)
+
+#Flip coordinates for hits occurring in the left zone to match those from the right zone
+pbp$y <- if_else(pbp$x < 0, pbp$y * -1, pbp$y)
+pbp$x <- if_else(pbp$x < 0, pbp$x * -1, pbp$x)
+
+#Classify each hit by the region in which it occurred
+pbp <- pbp %>% mutate(zone = case_when(((y >= 31) & (x <= 89)) | ((y <= -31) & (x <= 89)) ~ "Boards", ((y >= 25) & (x >= 89)) | ((y <= -25) & (x >= 89)) ~ "Corners", (abs(y) < 31) & (x <= 89) ~ "Middle", ((y > -25) & (y < 25)) & (x > 89) ~ "Behind_the_Net"))
+```
+
+```{r, echo = TRUE}
+#Get the data for the "Regular Season at 5 on 5" chart
+reg_season_stats <- pbp %>% group_by(zone) %>% summarize(total_hits = n(), sog_after_hits = sum(shot_after_hit, na.rm = TRUE), total_xg = sum(added_xg, na.rm = TRUE)) %>% mutate(sog_rate = sog_after_hits / total_hits, xg_per_hit = total_xg / total_hits, xg_per_sog = total_xg / sog_after_hits)
+reg_season_stats
+```
+
+```{r, echo = TRUE}
+#Repeat chunks 2-4 but this time only include the postseason games to get the data for the "Postseason at 5 on 5" chart
+pbp_list <- list(pbp1011, pbp1112, pbp1213, pbp1314, pbp1415, pbp1516, pbp1617, pbp1718, pbp1819, pbp1920, pbp2021, pbp2122, pbp2223)
+pbp_list2 <- list()
+for(pbp in pbp_list){
+pbp <- pbp %>% select(event, xg, event_team, event_team_abbr, event_player_1_name, period, x, y,  x_fixed, y_fixed, season_type, home_skaters, away_skaters, game_id)
+pbp_list2 <- append(pbp_list2, list(pbp))
+    }
+pbp <- bind_rows(pbp_list2)
+
+pbp <- pbp %>% mutate(next_event = lead(event), next_team = lead(event_team), next_period = lead(period), added_xg = lead(xg), next_x = lead(x), result = if_else((x > 25 & next_x > 25) | (x < -25 & next_x < -25),TRUE, FALSE))
+pbp <- pbp %>% mutate(shot_after_hit = if_else((next_event == "shot-on-goal") | (next_event == "Shot") | (next_event == "Goal") | (next_event == "goal"), 1, 0), goal_after_hit = if_else((next_event == "goal") | (next_event == "Goal"), 1, 0))
+pbp <- pbp %>% filter(((event == "hit") | (event == "Hit")) & (event_team == next_team) & (period == next_period) & (result == TRUE) & ((season_type == "POS") | (season_type == "P")) & ((home_skaters == 5) & (away_skaters == 5))) %>% select(x, y, added_xg, shot_after_hit, goal_after_hit, event_team)
+
+pbp$y <- if_else(pbp$x < 0, pbp$y * -1, pbp$y)
+pbp$x <- if_else(pbp$x < 0, pbp$x * -1, pbp$x)
+
+pbp <- pbp %>% mutate(zone = case_when(((y >= 31) & (x <= 89)) | ((y <= -31) & (x <= 89)) ~ "Boards", ((y >= 25) & (x >= 89)) | ((y <= -25) & (x >= 89)) ~ "Corners", (abs(y) < 31) & (x <= 89) ~ "Middle", ((y > -25) & (y < 25)) & (x > 89) ~ "Behind_the_Net"))
+
+postseason_stats <- pbp %>% group_by(zone) %>% summarize(total_hits = n(), sog_after_hits = sum(shot_after_hit, na.rm = TRUE), total_xg = sum(added_xg, na.rm = TRUE)) %>% mutate(sog_rate = sog_after_hits / total_hits, xg_per_hit = total_xg / total_hits, xg_per_sog = total_xg / sog_after_hits)
+postseason_stats
+```
+
+```{r, echo = TRUE}
+#Repeat chunks 2-3 but this time create a pbp_list() going from 2014 to 2024
+pbp_list <- list(pbp1415, pbp1516, pbp1617, pbp1718, pbp1819, pbp1920, pbp2021, pbp2122, pbp2223, pbp2324)
+pbp_list2 <- list()
+for(pbp in pbp_list){
+pbp <- pbp %>% select(event, event_team, event_team_abbr, event_player_1_name, period, x, y,  x_fixed, y_fixed, season_type, home_skaters, away_skaters, game_id)
+pbp_list2 <- append(pbp_list2, list(pbp))
+    }
+pbp <- bind_rows(pbp_list2)
+
+pbp <- pbp %>% mutate(next_event = lead(event), next_team = lead(event_team), next_period = lead(period), next_x = lead(x), result = if_else((x > 25 & next_x > 25) | (x < -25 & next_x < -25),TRUE, FALSE))
+pbp <- pbp %>% mutate(shot_after_hit = if_else((next_event == "shot-on-goal") | (next_event == "Shot") | (next_event == "Goal") | (next_event == "goal"), 1, 0), goal_after_hit = if_else((next_event == "goal") | (next_event == "Goal"), 1, 0))
+pbp <- pbp %>% filter(((event == "hit") | (event == "Hit")) & (event_team == next_team) & (period == next_period) & (result == TRUE) & ((season_type == "REG") | (season_type == "R") | (season_type == "2")) & ((home_skaters == 5) & (away_skaters == 5))) %>% select(x, y, shot_after_hit, goal_after_hit, event_team, event_player_1_name)
+
+pbp$y <- if_else(pbp$x < 0, pbp$y * -1, pbp$y)
+pbp$x <- if_else(pbp$x < 0, pbp$x * -1, pbp$x)
+
+pbp <- pbp %>% mutate(zone = case_when(((y >= 31) & (x <= 89)) | ((y <= -31) & (x <= 89)) ~ "Boards", ((y >= 25) & (x >= 89)) | ((y <= -25) & (x >= 89)) ~ "Corners", (abs(y) < 31) & (x <= 89) ~ "Middle", ((y > -25) & (y < 25)) & (x > 89) ~ "Behind_the_Net"))
+#Get the data for the "Hits From 2014 to 2024" chart
+total_hits <- pbp %>% group_by(event_player_1_name) %>% summarize(total_hits = n(), sog_after_hits = sum(shot_after_hit, na.rm = TRUE)) %>% mutate(shot_generation_rate = sog_after_hits / total_hits) %>% arrange(desc(sog_after_hits))
+print(total_hits, n = 10)
+```
+
